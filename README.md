@@ -1,1 +1,1 @@
-# BGT2
+# (Pa)prasta Blokų Grandinė
