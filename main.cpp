@@ -11,7 +11,7 @@ class User
 
     const std::string name;
     const std::string public_key = name + "'s_key"; // temp
-    unsigned int balance = 30; // temp
+    unsigned int balance;
 
     public:
 
@@ -38,9 +38,9 @@ class Transaction
     const std::string transaction_id = Hash (sender + receiver + std::to_string(amount));
 
     public:
-    Transaction (User& sender, User& receiver, unsigned int amount) : sender(sender.get_key()), receiver(receiver.get_key()), amount(amount) {sender.update_balance(-amount), receiver.update_balance(amount);}
+    Transaction (User& sender, User& receiver, unsigned int amount) : sender(sender.get_key()), receiver(receiver.get_key()), amount(amount) {}
 
-    void print() {std::cout << transaction_id << ": "<< sender << " >>>> " << receiver << " | " << amount << " PatCoin\n";}
+    void print_about() {std::cout << transaction_id << ": "<< std::setw(26) << std::right << sender << " >>>> " << std::setw(26) << std::left << receiver << " | " << std::setw(5) << amount << " PatCoin\n";}
 };
 
 class Block
@@ -75,6 +75,23 @@ std::vector<User> Generate_Users()
     return Users;
 } 
 
+std::vector<Transaction> Generate_Transactions(std::vector<User>& Users) 
+{
+    std::vector<Transaction> Transactions;
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distr(1, 1000);
+    std::uniform_int_distribution<> user_distr(0, Users.size()-1);
+
+    for (int i = 0; i < 1000; i++)
+    {
+        Transactions.push_back (Transaction (Users.at(user_distr(gen)), Users.at(user_distr(gen)), distr(gen)));
+    }
+
+    return Transactions;
+}
+
 int main() 
 {
     std::vector <User> Users = Generate_Users();
@@ -84,13 +101,12 @@ int main()
         u.print_about_me();
     }
 
-    User a ("Andrius", 100);
-    User b ("Paulius", 40);
+    std::vector<Transaction> Transactions = Generate_Transactions(Users);
 
-    std::cout << a.get_balance() << " " << b.get_balance() << "\n";
+    for (Transaction t : Transactions)
+    {
+        t.print_about();
+    }
 
-    Transaction c (a, b, 15);
-    c.print();
-    std::cout << a.get_balance() << " " << b.get_balance() << "\n";
     return 0;
 }
