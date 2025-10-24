@@ -4,6 +4,7 @@
 #include <chrono>
 #include <list>
 #include <iomanip>
+#include <algorithm>
 
 class User
 {
@@ -15,9 +16,9 @@ class User
 
     public:
 
-    std::string get_name() {return name;}
-    std::string get_key() {return public_key;}
-    unsigned int get_balance() {return balance;}
+    const std::string get_name() {return name;}
+    const std::string get_key() {return public_key;}
+    const unsigned int get_balance() {return balance;}
 
     void print_about_me() {std::cout << "Name: " << std::setw(25) << name << " | Balance: " << std::setw(10) << balance << " PatCoins | Public Key: " << public_key << "\n";}
 
@@ -41,25 +42,66 @@ class Transaction
     Transaction (User& sender, User& receiver, unsigned int amount) : sender(sender.get_key()), receiver(receiver.get_key()), amount(amount) {}
 
     void print_about() {std::cout << transaction_id << ": "<< std::setw(26) << std::right << sender << " >>>> " << std::setw(26) << std::left << receiver << " | " << std::setw(5) << amount << " PatCoin\n";}
+    const std::string get_id() {return transaction_id;}
 };
 
 class Block
 {
     private:
 
-    // Header
-    std::string prev_block_hash;
-    const std::chrono::time_point<std::chrono::system_clock> timestamp = std::chrono::system_clock::now();
-    const std::string version = "v0.1";
-    unsigned int difficulty_target;
-
     //Body
-    std::list<Transaction> Transactions;
+    const std::vector<Transaction> Transactions;
+
+    std::string all_transaction_id ()
+    {
+        std::string temp = "";
+        for (Transaction t : Transactions)
+        {
+            temp += t.get_id();    
+        }
+        return temp;
+    }
+  
+
+    // Header
+    const std::string prev_block_hash;
+    const long unsigned int timestamp = static_cast<long unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    const std::string root_hash = Hash (all_transaction_id());
+    const std::string version = "v0.1";
+    const unsigned int nounce;
+    const unsigned int difficulty_target;
+
+    const std::string block_hash = Hash (prev_block_hash + std::to_string(timestamp) + root_hash + version + std::to_string(nounce) + std::to_string(difficulty_target));
+
+
 
     public:
+
+    Block (std::string prev_block_hash, unsigned int nounce, unsigned int difficulty_target, std::vector<Transaction> Transaction_Block) : prev_block_hash(prev_block_hash), nounce(nounce), difficulty_target(difficulty_target), Transactions(Transaction_Block) {}
+
+    const std::string get_hash() {return block_hash;}
+
+    void print_info()
+    {
+        std::cout << "\n"
+                  << "|----------------------------------------------------------------------------------|\n" <<"|         " << block_hash << "         |\n" << "|----------------------------------------------------------------------------------|\n"
+                  << "| Previous Block: " << std::setw(64) << prev_block_hash   << " |\n"
+                  << "| Timestamp:      " << std::setw(64) << timestamp         << " |\n"
+                  << "| Root Hash:      " << std::setw(64) << root_hash         << " |\n"
+                  << "| Version:        " << std::setw(64) << version           << " |\n"
+                  << "| Nounce:         " << std::setw(64) << nounce            << " |\n"
+                  << "| Difficulty:     " << std::setw(64) << difficulty_target << " |\n"
+                  << "|----------------------------------------------------------------------------------|\n" <<"|         " << block_hash << "         |\n" << "|----------------------------------------------------------------------------------|\n"
+                  << "\n";
+
+//        for (Transaction t : Transactions)
+//        {
+//            t.print_about();
+//        }
+    }
 };
 
-std::vector<User> Generate_Users() 
+std::vector<User> Generate_Users(int amount) 
 {
     std::vector<User> Users;
 
@@ -67,7 +109,7 @@ std::vector<User> Generate_Users()
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> distr(100, 1000000);
     
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < amount; i++)
     {
         Users.push_back (User (names[i], distr(gen)));
     }
@@ -75,7 +117,7 @@ std::vector<User> Generate_Users()
     return Users;
 } 
 
-std::vector<Transaction> Generate_Transactions(std::vector<User>& Users) 
+std::vector<Transaction> Generate_Transactions(std::vector<User>& Users, int amount) 
 {
     std::vector<Transaction> Transactions;
 
@@ -84,7 +126,7 @@ std::vector<Transaction> Generate_Transactions(std::vector<User>& Users)
     std::uniform_int_distribution<> distr(1, 1000);
     std::uniform_int_distribution<> user_distr(0, Users.size()-1);
 
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < amount; i++)
     {
         Transactions.push_back (Transaction (Users.at(user_distr(gen)), Users.at(user_distr(gen)), distr(gen)));
     }
@@ -92,21 +134,72 @@ std::vector<Transaction> Generate_Transactions(std::vector<User>& Users)
     return Transactions;
 }
 
+std::vector<Transaction> Generate_Transaction_Block(std::vector<Transaction>& Transactions)
+{
+    std::vector<Transaction> tran_block;
+
+    while (!Transactions.empty() && tran_block.size() < 100)
+    {
+            tran_block.push_back(Transactions.back());
+            Transactions.pop_back();
+    }
+    
+    return tran_block;
+}
+
+Block Mine_Block (std::string prev_block_hash, unsigned int difficulty_target, std::vector<Transaction> transaction_block)
+{
+    int nounce = 0;
+    std::string difficulty = (difficulty_target, "0");
+
+    while (true)
+    {
+        Block new_block(prev_block_hash, nounce++, difficulty_target, transaction_block);
+        std::string new_block_hash = new_block.get_hash();
+        std::cout << new_block_hash << std::endl;
+
+        if (new_block_hash.substr(0, difficulty_target) == difficulty)
+        {
+            std::cout << "\n|-------------|\n|             |\n| BLOCK MINED |\n|             |\n|-------------|\n\n";
+            return new_block;
+            break;
+        }
+    }
+}
+
 int main() 
 {
-    std::vector <User> Users = Generate_Users();
+    int difficulty = 1;
+    std::random_device rd;
+    std::vector <User> Users = Generate_Users(100);
 
     for (User u : Users)
     {
         u.print_about_me();
     }
 
-    std::vector<Transaction> Transactions = Generate_Transactions(Users);
+    std::vector<Transaction> Transactions = Generate_Transactions(Users, 101);
+
+    //std::shuffle(Transactions.begin(), Transactions.end(), rd);
 
     for (Transaction t : Transactions)
     {
         t.print_about();
     }
 
+    std::list<Block> Blockchain;
+
+    while (!Transactions.empty())
+    {
+        if (Blockchain.empty()) Blockchain.push_back(Mine_Block("0000000000000000000000000000000000000000000000000000000000000000", difficulty, Generate_Transaction_Block(Transactions)));
+        else Blockchain.push_back(Mine_Block(Blockchain.back().get_hash(), difficulty, Generate_Transaction_Block(Transactions)));
+    }
+
+    for (Block b : Blockchain)
+    {
+        b.print_info();
+    }
+
+    std::cout<<Blockchain.size();
     return 0;
 }
