@@ -43,6 +43,9 @@ class Transaction
 
     void print_about() {std::cout << transaction_id << ": "<< std::setw(26) << std::right << sender << " >>>> " << std::setw(26) << std::left << receiver << " | " << std::setw(5) << amount << " PatCoin\n";}
     const std::string get_id() {return transaction_id;}
+    const std::string get_sender() {return sender;}
+    const std::string get_receiver() {return receiver;}
+    const unsigned int get_amount() {return amount;}
 };
 
 class Block
@@ -52,7 +55,7 @@ class Block
     //Body
     const std::vector<Transaction> Transactions;
 
-    std::string all_transaction_id ()
+    /*std::string all_transaction_id ()
     {
         std::string temp = "";
         for (Transaction t : Transactions)
@@ -61,12 +64,13 @@ class Block
         }
         return temp;
     }
+    */
   
 
     // Header
     const std::string prev_block_hash;
     const long unsigned int timestamp = static_cast<long unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-    const std::string root_hash = Hash (all_transaction_id());
+    const std::string root_hash;
     const std::string version = "v0.1";
     const unsigned int nounce;
     const unsigned int difficulty_target;
@@ -77,7 +81,7 @@ class Block
 
     public:
 
-    Block (std::string prev_block_hash, unsigned int nounce, unsigned int difficulty_target, std::vector<Transaction> Transaction_Block) : prev_block_hash(prev_block_hash), nounce(nounce), difficulty_target(difficulty_target), Transactions(Transaction_Block) {}
+    Block (std::string prev_block_hash, unsigned int nounce, unsigned int difficulty_target, std::vector<Transaction> Transaction_Block, std::string root_hash) : prev_block_hash(prev_block_hash), nounce(nounce), difficulty_target(difficulty_target), Transactions(Transaction_Block), root_hash(root_hash) {}
 
     const std::string get_hash() {return block_hash;}
 
@@ -150,13 +154,19 @@ std::vector<Transaction> Generate_Transaction_Block(std::vector<Transaction>& Tr
 Block Mine_Block (std::string prev_block_hash, unsigned int difficulty_target, std::vector<Transaction> transaction_block)
 {
     int nounce = 0;
-    std::string difficulty = (difficulty_target, "0");
+    std::string difficulty(difficulty_target, '0');
+
+        std::string temp = "";
+        for (Transaction t : transaction_block)
+        {
+            temp += t.get_id();    
+        }
 
     while (true)
     {
-        Block new_block(prev_block_hash, nounce++, difficulty_target, transaction_block);
+        Block new_block(prev_block_hash, nounce++, difficulty_target, transaction_block, Hash(temp));
         std::string new_block_hash = new_block.get_hash();
-        std::cout << new_block_hash << std::endl;
+        //std::cout << new_block_hash << std::endl;
 
         if (new_block_hash.substr(0, difficulty_target) == difficulty)
         {
@@ -171,14 +181,14 @@ int main()
 {
     int difficulty = 1;
     std::random_device rd;
-    std::vector <User> Users = Generate_Users(100);
+    std::vector <User> Users = Generate_Users(2);
 
     for (User u : Users)
     {
         u.print_about_me();
     }
 
-    std::vector<Transaction> Transactions = Generate_Transactions(Users, 101);
+    std::vector<Transaction> Transactions = Generate_Transactions(Users, 300);
 
     //std::shuffle(Transactions.begin(), Transactions.end(), rd);
 
@@ -191,8 +201,19 @@ int main()
 
     while (!Transactions.empty())
     {
-        if (Blockchain.empty()) Blockchain.push_back(Mine_Block("0000000000000000000000000000000000000000000000000000000000000000", difficulty, Generate_Transaction_Block(Transactions)));
-        else Blockchain.push_back(Mine_Block(Blockchain.back().get_hash(), difficulty, Generate_Transaction_Block(Transactions)));
+        std::vector<Transaction> T_Block  = Generate_Transaction_Block(Transactions);
+
+        if (Blockchain.empty()) Blockchain.push_back(Mine_Block("0000000000000000000000000000000000000000000000000000000000000000", difficulty, T_Block));
+        else Blockchain.push_back(Mine_Block(Blockchain.back().get_hash(), difficulty, T_Block));
+
+        for (int i = 0; i < T_Block.size(); i++) 
+        {
+            for (int j = 0; j < Users.size(); j++)
+            {
+                if (Users[j].get_key() == T_Block[i].get_sender()) Users[j].update_balance(-T_Block[i].get_amount());
+                if (Users[j].get_key() == T_Block[i].get_receiver()) Users[j].update_balance(T_Block[i].get_amount());
+            }
+        }
     }
 
     for (Block b : Blockchain)
@@ -200,6 +221,9 @@ int main()
         b.print_info();
     }
 
-    std::cout<<Blockchain.size();
+    for (User u : Users)
+    {
+        u.print_about_me();
+    }
     return 0;
 }
