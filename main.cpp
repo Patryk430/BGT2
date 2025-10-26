@@ -142,7 +142,7 @@ std::vector<Transaction> Generate_Transaction_Block(std::vector<Transaction>& Tr
 {
     std::vector<Transaction> tran_block;
 
-    while (!Transactions.empty() && tran_block.size() < 100)
+    while (!Transactions.empty() && tran_block.size() < 50)
     {
             tran_block.push_back(Transactions.back());
             Transactions.pop_back();
@@ -179,7 +179,7 @@ Block Mine_Block (std::string prev_block_hash, unsigned int difficulty_target, s
 
 int main() 
 {
-    int difficulty = 1;
+    int difficulty = 3;
     std::random_device rd;
     std::vector <User> Users = Generate_Users(2);
 
@@ -188,7 +188,7 @@ int main()
         u.print_about_me();
     }
 
-    std::vector<Transaction> Transactions = Generate_Transactions(Users, 300);
+    std::vector<Transaction> Transactions = Generate_Transactions(Users, 150);
 
     //std::shuffle(Transactions.begin(), Transactions.end(), rd);
 
