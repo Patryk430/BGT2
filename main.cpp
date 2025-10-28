@@ -6,6 +6,8 @@
 #include <iomanip>
 #include <algorithm>
 
+bool debug_mode = false;
+
 class User
 {
     private:
@@ -74,6 +76,7 @@ class Block
     const std::string version = "v0.1";
     const unsigned int nounce;
     const unsigned int difficulty_target;
+    const unsigned int transaction_amount = Transactions.size();
 
     const std::string block_hash = Hash (prev_block_hash + std::to_string(timestamp) + root_hash + version + std::to_string(nounce) + std::to_string(difficulty_target));
 
@@ -89,19 +92,17 @@ class Block
     {
         std::cout << "\n"
                   << "|----------------------------------------------------------------------------------|\n" <<"|         " << block_hash << "         |\n" << "|----------------------------------------------------------------------------------|\n"
-                  << "| Previous Block: " << std::setw(64) << prev_block_hash   << " |\n"
-                  << "| Timestamp:      " << std::setw(64) << timestamp         << " |\n"
-                  << "| Root Hash:      " << std::setw(64) << root_hash         << " |\n"
-                  << "| Version:        " << std::setw(64) << version           << " |\n"
-                  << "| Nounce:         " << std::setw(64) << nounce            << " |\n"
-                  << "| Difficulty:     " << std::setw(64) << difficulty_target << " |\n"
+                  << "| Previous Block: " << std::setw(64) << prev_block_hash    << " |\n"
+                  << "| Timestamp:      " << std::setw(64) << timestamp          << " |\n"
+                  << "| Root Hash:      " << std::setw(64) << root_hash          << " |\n"
+                  << "| Version:        " << std::setw(64) << version            << " |\n"
+                  << "| Nounce:         " << std::setw(64) << nounce             << " |\n"
+                  << "| Difficulty:     " << std::setw(64) << difficulty_target  << " |\n"
+                  << "| Transactions:   " << std::setw(64) << transaction_amount << " |\n"
                   << "|----------------------------------------------------------------------------------|\n" <<"|         " << block_hash << "         |\n" << "|----------------------------------------------------------------------------------|\n"
                   << "\n";
 
-//        for (Transaction t : Transactions)
-//        {
-//            t.print_about();
-//        }
+        if (debug_mode) for (Transaction t : Transactions) { t.print_about(); }
     }
 };
 
@@ -140,9 +141,21 @@ std::vector<Transaction> Generate_Transactions(std::vector<User>& Users, int amo
 
 std::vector<Transaction> Generate_Transaction_Block(std::vector<Transaction>& Transactions)
 {
+    std::random_device rd;
+    std::mt19937 mt(rd());
+
+    std::vector<size_t> idx(Transactions.size());
+    std::iota(idx.begin(), idx.end(), 0);
+    std::shuffle(idx.begin(), idx.end(), mt);
+
+    std::vector<Transaction> shuffled;
+    shuffled.reserve(Transactions.size());
+    for (auto i : idx) shuffled.push_back(Transactions[i]);
+    Transactions.swap(shuffled);
+
     std::vector<Transaction> tran_block;
 
-    while (!Transactions.empty() && tran_block.size() < 50)
+    while (!Transactions.empty() && tran_block.size() < 100)
     {
             tran_block.push_back(Transactions.back());
             Transactions.pop_back();
@@ -180,24 +193,25 @@ Block Mine_Block (std::string prev_block_hash, unsigned int difficulty_target, s
 int main() 
 {
     int difficulty = 3;
-    std::random_device rd;
-    std::vector <User> Users = Generate_Users(2);
+      
+    char input;
+    std::cout << "D for debug: "; std::cin >> input; 
+    if (input == 'D') debug_mode = 1;
+    std::cout << "\n\n";
 
-    for (User u : Users)
-    {
-        u.print_about_me();
-    }
+    std::cout << "| GENERATING USERS |\n";
+    std::vector <User> Users = Generate_Users(100);
+    if (debug_mode) for (User u : Users) { u.print_about_me(); }
+    std::cout << "| USERS GENERATED  |\n\n";
 
-    std::vector<Transaction> Transactions = Generate_Transactions(Users, 150);
-
-    //std::shuffle(Transactions.begin(), Transactions.end(), rd);
-
-    for (Transaction t : Transactions)
-    {
-        t.print_about();
-    }
+    std::cout << "| GENERATING TRANSACTIONS |\n";
+    std::vector<Transaction> Transactions = Generate_Transactions(Users, 166);
+    if (debug_mode) for (Transaction t : Transactions) { t.print_about(); }
+    std::cout << "| TRANSACTIONS GENERATED  |\n\n";
 
     std::list<Block> Blockchain;
+
+    std::cout << "| COMMENSING MINING |\n";
 
     while (!Transactions.empty())
     {
@@ -216,14 +230,16 @@ int main()
         }
     }
 
+    std::cout << "| MINING COMPLETE |\n";
+
     for (Block b : Blockchain)
     {
         b.print_info();
     }
 
-    for (User u : Users)
+    /*for (User u : Users)
     {
         u.print_about_me();
-    }
+    }*/
     return 0;
 }
