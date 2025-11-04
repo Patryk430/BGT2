@@ -164,20 +164,47 @@ std::vector<Transaction> Generate_Transaction_Block(std::vector<Transaction>& Tr
     return tran_block;
 }
 
+// Compute the Merkle Root from a list of transaction IDs
+std::string Compute_Merkle_Root(const std::vector<Transaction>& transactions)
+{
+    if (transactions.empty()) 
+        return Hash("EMPTY_BLOCK");  // handle edge case
+
+    // Step 1: Collect all transaction hashes
+    std::vector<std::string> layer;
+    for (auto tx : transactions)
+        layer.push_back(tx.get_id());
+
+    // Step 2: Build up the tree until one hash remains
+    while (layer.size() > 1)
+    {
+        // If odd number of elements, duplicate the last one (Bitcoin-style)
+        if (layer.size() % 2 != 0)
+            layer.push_back(layer.back());
+
+        std::vector<std::string> next_layer;
+        for (size_t i = 0; i < layer.size(); i += 2)
+        {
+            std::string combined = layer[i] + layer[i + 1];
+            next_layer.push_back(Hash(combined));
+        }
+        layer = next_layer;
+    }
+
+    // Step 3: Final hash is the Merkle Root
+    return layer[0];
+}
+
 Block Mine_Block (std::string prev_block_hash, unsigned int difficulty_target, std::vector<Transaction> transaction_block)
 {
     int nounce = 0;
     std::string difficulty(difficulty_target, '0');
 
-        std::string temp = "";
-        for (Transaction t : transaction_block)
-        {
-            temp += t.get_id();    
-        }
+    std::string merkle_root = Compute_Merkle_Root(transaction_block);
 
     while (true)
     {
-        Block new_block(prev_block_hash, nounce++, difficulty_target, transaction_block, Hash(temp));
+        Block new_block(prev_block_hash, nounce++, difficulty_target, transaction_block, merkle_root);
         std::string new_block_hash = new_block.get_hash();
         //std::cout << new_block_hash << std::endl;
 
