@@ -73,7 +73,7 @@ class Block
     const std::string prev_block_hash;
     const long unsigned int timestamp = static_cast<long unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     const std::string root_hash;
-    const std::string version = "v0.1";
+    const std::string version = "v0.2";
     const unsigned int nounce;
     const unsigned int difficulty_target;
     const unsigned int transaction_amount = Transactions.size();
@@ -195,6 +195,69 @@ std::string Compute_Merkle_Root(const std::vector<Transaction>& transactions)
     return layer[0];
 }
 
+struct MerkleNode
+{
+    std::string sibling_hash;
+    bool sibling_is_left;
+};
+
+std::vector<MerkleNode> Generate_Merkle_Proof(const std::vector<Transaction>& transactions, const std::string& target_txid)
+{
+    std::vector<std::string> layer;
+    for (auto tx : transactions)
+        layer.push_back(tx.get_id());
+
+    std::vector<MerkleNode> proof;
+    std::string current_hash = target_txid;
+
+    while (layer.size() > 1)
+    {
+        if (layer.size() % 2 != 0)
+            layer.push_back(layer.back());
+
+        std::vector<std::string> next_layer;
+
+        for (size_t i = 0; i < layer.size(); i += 2)
+        {
+            std::string left = layer[i];
+            std::string right = layer[i + 1];
+            std::string parent = Hash(left + right);
+
+            if (left == current_hash)
+            {
+                proof.push_back({right, false}); // sibling on the right
+                current_hash = parent;
+            }
+            else if (right == current_hash)
+            {
+                proof.push_back({left, true}); // sibling on the left
+                current_hash = parent;
+            }
+
+            next_layer.push_back(parent);
+        }
+
+        layer = next_layer;
+    }
+
+    return proof;
+}
+
+bool Verify_Merkle_Proof(std::string txid, const std::vector<MerkleNode>& proof, const std::string& root)
+{
+    std::string hash = txid;
+
+    for (const auto& p : proof)
+    {
+        if (p.sibling_is_left)
+            hash = Hash(p.sibling_hash + hash);
+        else
+            hash = Hash(hash + p.sibling_hash);
+    }
+
+    return hash == root;
+}
+
 Block Mine_Block (std::string prev_block_hash, unsigned int difficulty_target, std::vector<Transaction> transaction_block)
 {
     int nounce = 0;
@@ -215,6 +278,14 @@ Block Mine_Block (std::string prev_block_hash, unsigned int difficulty_target, s
             break;
         }
     }
+}
+
+bool Verify_Transaction(User& sender, User& receiver, unsigned int amount) 
+{
+    if (sender.get_key() == receiver.get_key()) return false;
+    if (amount == 0) return false;
+    if (sender.get_balance() < amount) return false;
+    return true;
 }
 
 int main() 
@@ -247,14 +318,35 @@ int main()
         if (Blockchain.empty()) Blockchain.push_back(Mine_Block("0000000000000000000000000000000000000000000000000000000000000000", difficulty, T_Block));
         else Blockchain.push_back(Mine_Block(Blockchain.back().get_hash(), difficulty, T_Block));
 
-        for (int i = 0; i < T_Block.size(); i++) 
-        {
-            for (int j = 0; j < Users.size(); j++)
-            {
-                if (Users[j].get_key() == T_Block[i].get_sender()) Users[j].update_balance(-T_Block[i].get_amount());
-                if (Users[j].get_key() == T_Block[i].get_receiver()) Users[j].update_balance(T_Block[i].get_amount());
+
+
+
+std::string merkle_root = Compute_Merkle_Root(T_Block);
+
+
+std::string target_txid = T_Block.front().get_id();
+auto proof = Generate_Merkle_Proof(T_Block, target_txid);
+
+if (Verify_Merkle_Proof(target_txid, proof, merkle_root))
+    std::cout << "✅ Transaction verified via Merkle proof.\n";
+else
+    std::cout << "❌ Transaction verification failed!\n";
+
+        for (auto t : T_Block) {
+            for (auto u : Users) {
+                if (u.get_key() == t.get_sender()) {
+            // Check if sender can afford the transaction
+                    if (u.get_balance() < t.get_amount()) {
+                        std::cout << "Invalid transaction skipped (insufficient funds): " << t.get_id() << "\n";
+                        continue; // skip transaction
+                    }
+                    u.update_balance(-t.get_amount());
+                }   
+            if (u.get_key() == t.get_receiver()) {
+                u.update_balance(t.get_amount());
             }
-        }
+            }
+}
     }
 
     std::cout << "| MINING COMPLETE |\n";
