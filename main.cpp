@@ -1,325 +1,8 @@
-#include <iostream>
-#include "hash.h"
-#include "realistic_names.cpp"
-#include <chrono>
-#include <list>
-#include <iomanip>
-#include <algorithm>
+#include "lib.h"
 
-bool debug_mode = false;
-
-class User
-{
-    private:
-
-     std::string name;
-     std::string public_key = name + "'s_key"; // temp
-    unsigned int balance;
-
-    public:
-
-    std::string get_name() const {return name;}
-    std::string get_key() const {return public_key;}
-    unsigned int get_balance() const {return balance;}
-
-    void print_about_me() const {std::cout << "Name: " << std::setw(25) << name << " | Balance: " << std::setw(10) << balance << " PatCoins | Public Key: " << public_key << "\n";}
-
-    void update_balance(int update) {balance=balance+update;}
-    User(std::string name, unsigned int balance) : name(name), balance(balance) {}
-
-
-};
-
-class Transaction
-{
-    private:
-
-    std::string sender;
-    std::string receiver;
-    unsigned int amount;
-
-     std::string transaction_id = Hash (sender + receiver + std::to_string(amount));
-
-    public:
-    Transaction (User& sender, User& receiver, unsigned int amount) : sender(sender.get_key()), receiver(receiver.get_key()), amount(amount) {}
-
-    void print_about() {std::cout << transaction_id << ": "<< std::setw(26) << std::right << sender << " >>>> " << std::setw(26) << std::left << receiver << " | " << std::setw(5) << amount << " PatCoin\n";}
-     std::string get_id() const {return transaction_id;}
-     std::string get_sender() const {return sender;}
-     std::string get_receiver() const {return receiver;}
-     unsigned int get_amount() const {return amount;}
-};
-
-class Block
-{
-    private:
-
-    //Body
-     std::vector<Transaction> Transactions;
-
-    /*std::string all_transaction_id ()
-    {
-        std::string temp = "";
-        for (Transaction t : Transactions)
-        {
-            temp += t.get_id();    
-        }
-        return temp;
-    }
-    */
-  
-
-    // Header
-     std::string prev_block_hash;
-     long unsigned int timestamp = static_cast<long unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-     std::string root_hash;
-     std::string version = "v0.2";
-     unsigned int nounce;
-     unsigned int difficulty_target;
-     unsigned int transaction_amount = Transactions.size();
-
-     std::string block_hash = Hash (prev_block_hash + std::to_string(timestamp) + root_hash + version + std::to_string(nounce) + std::to_string(difficulty_target));
-
-
-
-    public:
-
-    Block (std::string prev_block_hash, unsigned int nounce, unsigned int difficulty_target, std::vector<Transaction> Transaction_Block, std::string root_hash) : prev_block_hash(prev_block_hash), nounce(nounce), difficulty_target(difficulty_target), Transactions(Transaction_Block), root_hash(root_hash) {}
-
-    std::string get_hash() const {return block_hash;}
-     const std::vector<Transaction>& get_transactions() const {
-    return Transactions;
-}
-
-    void print_info()
-    {
-        std::cout << "\n"
-                  << "|----------------------------------------------------------------------------------|\n" <<"|         " << block_hash << "         |\n" << "|----------------------------------------------------------------------------------|\n"
-                  << "| Previous Block: " << std::setw(64) << prev_block_hash    << " |\n"
-                  << "| Timestamp:      " << std::setw(64) << timestamp          << " |\n"
-                  << "| Root Hash:      " << std::setw(64) << root_hash          << " |\n"
-                  << "| Version:        " << std::setw(64) << version            << " |\n"
-                  << "| Nounce:         " << std::setw(64) << nounce             << " |\n"
-                  << "| Difficulty:     " << std::setw(64) << difficulty_target  << " |\n"
-                  << "| Transactions:   " << std::setw(64) << transaction_amount << " |\n"
-                  << "|----------------------------------------------------------------------------------|\n" <<"|         " << block_hash << "         |\n" << "|----------------------------------------------------------------------------------|\n"
-                  << "\n";
-
-        if (debug_mode) for (Transaction t : Transactions) { t.print_about(); }
-    }
-};
-
-std::vector<User> Generate_Users(int amount) 
-{
-    std::vector<User> Users;
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> distr(100, 1000000);
-    
-    for (int i = 0; i < amount; i++)
-    {
-        Users.push_back (User (names[i], distr(gen)));
-    }
-
-    return Users;
-} 
-
-std::vector<Transaction> Generate_Transactions(std::vector<User>& Users, int amount) 
-{
-    std::vector<Transaction> Transactions;
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> distr(1, 1000);
-    std::uniform_int_distribution<> user_distr(0, Users.size()-1);
-
-    for (int i = 0; i < amount; i++)
-    {
-        Transactions.push_back (Transaction (Users.at(user_distr(gen)), Users.at(user_distr(gen)), distr(gen)));
-    }
-
-    return Transactions;
-}
-
-std::vector<Transaction> Generate_Transaction_Block(std::vector<Transaction>& Transactions)
-{
-    std::random_device rd;
-    std::mt19937 mt(rd());
-
-    std::vector<size_t> idx(Transactions.size());
-    std::iota(idx.begin(), idx.end(), 0);
-    std::shuffle(idx.begin(), idx.end(), mt);
-
-    std::vector<Transaction> shuffled;
-    shuffled.reserve(Transactions.size());
-    for (auto i : idx) shuffled.push_back(Transactions[i]);
-    Transactions.swap(shuffled);
-
-    std::vector<Transaction> tran_block;
-
-    while (!Transactions.empty() && tran_block.size() < 100)
-    {
-            tran_block.push_back(Transactions.back());
-            Transactions.pop_back();
-    }
-    
-    return tran_block;
-}
-
-// Compute the Merkle Root from a list of transaction IDs
-std::string Compute_Merkle_Root(const std::vector<Transaction>& transactions)
-{
-    if (transactions.empty()) 
-        return Hash("EMPTY_BLOCK");  // handle edge case
-
-    // Step 1: Collect all transaction hashes
-    std::vector<std::string> layer;
-    for (auto tx : transactions)
-        layer.push_back(tx.get_id());
-
-    // Step 2: Build up the tree until one hash remains
-    while (layer.size() > 1)
-    {
-        // If odd number of elements, duplicate the last one (Bitcoin-style)
-        if (layer.size() % 2 != 0)
-            layer.push_back(layer.back());
-
-        std::vector<std::string> next_layer;
-        for (size_t i = 0; i < layer.size(); i += 2)
-        {
-            std::string combined = layer[i] + layer[i + 1];
-            next_layer.push_back(Hash(combined));
-        }
-        layer = next_layer;
-    }
-
-    // Step 3: Final hash is the Merkle Root
-    return layer[0];
-}
-
-struct MerkleNode
-{
-    std::string sibling_hash;
-    bool sibling_is_left;
-};
-
-std::vector<MerkleNode> Generate_Merkle_Proof(const std::vector<Transaction>& transactions, const std::string& target_txid)
-{
-    std::vector<std::string> layer;
-    for (auto tx : transactions)
-        layer.push_back(tx.get_id());
-
-    std::vector<MerkleNode> proof;
-    std::string current_hash = target_txid;
-
-    while (layer.size() > 1)
-    {
-        if (layer.size() % 2 != 0)
-            layer.push_back(layer.back());
-
-        std::vector<std::string> next_layer;
-
-        for (size_t i = 0; i < layer.size(); i += 2)
-        {
-            std::string left = layer[i];
-            std::string right = layer[i + 1];
-            std::string parent = Hash(left + right);
-
-            if (left == current_hash)
-            {
-                proof.push_back({right, false}); // sibling on the right
-                current_hash = parent;
-            }
-            else if (right == current_hash)
-            {
-                proof.push_back({left, true}); // sibling on the left
-                current_hash = parent;
-            }
-
-            next_layer.push_back(parent);
-        }
-
-        layer = next_layer;
-    }
-
-    return proof;
-}
-
-bool Verify_Merkle_Proof(std::string txid, const std::vector<MerkleNode>& proof, const std::string& root)
-{
-    std::string hash = txid;
-
-    for (const auto& p : proof)
-    {
-        if (p.sibling_is_left)
-            hash = Hash(p.sibling_hash + hash);
-        else
-            hash = Hash(hash + p.sibling_hash);
-    }
-
-    return hash == root;
-}
-
-
-Block Mine_Block (std::string prev_block_hash, unsigned int difficulty_target, std::vector<Transaction> transaction_block)
-{
-    int nounce = 0;
-    std::string difficulty(difficulty_target, '0');
-
-    std::string merkle_root = Compute_Merkle_Root(transaction_block);
-
-    while (true)
-    {
-        Block new_block(prev_block_hash, nounce++, difficulty_target, transaction_block, merkle_root);
-        std::string new_block_hash = new_block.get_hash();
-        //std::cout << new_block_hash << std::endl;
-
-        if (new_block_hash.substr(0, difficulty_target) == difficulty)
-        {
-            std::cout << "\n|-------------|\n|             |\n| BLOCK MINED |\n|             |\n|-------------|\n\n";
-            return new_block;
-            break;
-        }
-    }
-}
-
-void Remove_Mined_Transactions(std::vector<Transaction>& pool,
-                               const std::vector<Transaction>& mined)
-{
-    pool.erase(
-        std::remove_if(pool.begin(), pool.end(),
-            [&](const Transaction& tx) {
-                return std::any_of(mined.begin(), mined.end(),
-                    [&](const Transaction& mt) {
-                        return tx.get_id() == mt.get_id();
-                    });
-            }),
-        pool.end());
-}
-
-bool Verify_Transaction(User& sender, User& receiver, unsigned int amount) 
-{
-    if (sender.get_key() == receiver.get_key()) return false;
-    if (amount == 0) return false;
-    if (sender.get_balance() < amount) return false;
-    return true;
-}
-
-#include <thread>
-#include <atomic>
-#include <vector>
-#include <optional>
-#include <chrono>
-
-// Thread-safe global mining flag
 std::atomic<bool> stop_mining(false);
 
-Block Mine_Block_With_Timeout(
-    const std::string& prev_block_hash,
-    unsigned int difficulty_target,
-    std::vector<Transaction> transactions,
-    int timeout_seconds)
+Block Mine_Block_With_Timeout(const std::string& prev_block_hash, unsigned int difficulty_target, std::vector<Transaction> transactions, int timeout_seconds)
 {
     std::optional<Block> result;
     unsigned int start_nonce = 0; // Continue nonce across retries
@@ -382,7 +65,31 @@ Block Mine_Block_With_Timeout(
     return *result;
 }
 
+void Remove_Mined_Transactions(std::vector<Transaction>& pool, const std::vector<Transaction>& mined)
+{
+    pool.erase(
+        std::remove_if(pool.begin(), pool.end(),
+            [&](const Transaction& tx) {
+                return std::any_of(mined.begin(), mined.end(),
+                    [&](const Transaction& mt) {
+                        return tx.get_id() == mt.get_id();
+                    });
+            }),
+        pool.end());
+}
 
+void PrintTopRichestUsers(std::vector<User> sorted_users, int top_n = 10) 
+{
+    std::sort(sorted_users.begin(), sorted_users.end(),
+              [](User& a, User& b) { return a.get_balance() > b.get_balance(); });
+
+    std::cout << "Top " << top_n << " richest users:\n";
+    for (int i = 0; i < top_n && i < (int)sorted_users.size(); ++i) {
+        User& u = sorted_users[i];
+        std::cout << i + 1 << ". " << u.get_name() << " - Balance: " << u.get_balance() << "\n";
+    }
+    std::cout << std::endl;
+}
 
 int main() 
 {
@@ -405,13 +112,16 @@ int main()
 
     std::list<Block> Blockchain;
 
+    std::cout << "| RICHEST USERS BEFORE MINING |\n";
+    PrintTopRichestUsers(Users, 10);
+
     std::cout << "| COMMENSING MINING |\n";
 
     while (!Transactions.empty())
     {
         std::vector<Transaction> T_Block = Generate_Transaction_Block(Transactions);
 
-        int timeout_seconds = 1;
+        int timeout_seconds = 5;
         std::string prev_hash = Blockchain.empty()
             ? std::string(64, '0')
             : Blockchain.back().get_hash();
@@ -462,9 +172,8 @@ int main()
         b.print_info();
     }
 
-    /*for (User u : Users)
-    {
-        u.print_about_me();
-    }*/
-    return 0;
+std::cout << "| RICHEST USERS AFTER MINING |\n";
+PrintTopRichestUsers(Users, 10);
+
+return 0;
 }
