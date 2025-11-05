@@ -16,3 +16,13 @@ Programa:
 3. Formuoja `Block` klasės bloką iš _100_ atsitiktinių transakcijų.
 4. 'Kasa' bloką hash'uojant pagrindinius jo antraštės elementus.
 5. Prideda bloką prie grandinės ir pagal jį atnaujina `Users` balansus.
+### v0.2 versijoje:
+* Paraleliškai kasami 5 blokai nauduojant `std::thread` funkciją.
+* Bloko header'yje vietoje visų transakcijų hash'o implementuotas `merkle_root_hash`.
+* Implementuota transakcijos verifikacija pagal _Merkle Tree_.
+
+## Įspėjimas: programoje buvo panauduotas <ins>***Vibe Coding***</ins> metodas
+Ponas _Žė-pė-te_ padėjo su:
+* Hash'avimo optimizacija.
+* Merkle Tree implementacija.
+* Kasimo paralelizavimu.
