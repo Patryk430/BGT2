@@ -12,17 +12,17 @@ class User
 {
     private:
 
-    const std::string name;
-    const std::string public_key = name + "'s_key"; // temp
+     std::string name;
+     std::string public_key = name + "'s_key"; // temp
     unsigned int balance;
 
     public:
 
-    const std::string get_name() {return name;}
-    const std::string get_key() {return public_key;}
-    const unsigned int get_balance() {return balance;}
+    std::string get_name() const {return name;}
+    std::string get_key() const {return public_key;}
+    unsigned int get_balance() const {return balance;}
 
-    void print_about_me() {std::cout << "Name: " << std::setw(25) << name << " | Balance: " << std::setw(10) << balance << " PatCoins | Public Key: " << public_key << "\n";}
+    void print_about_me() const {std::cout << "Name: " << std::setw(25) << name << " | Balance: " << std::setw(10) << balance << " PatCoins | Public Key: " << public_key << "\n";}
 
     void update_balance(int update) {balance=balance+update;}
     User(std::string name, unsigned int balance) : name(name), balance(balance) {}
@@ -34,20 +34,20 @@ class Transaction
 {
     private:
 
-    const std::string sender;
-    const std::string receiver;
-    const unsigned int amount;
+    std::string sender;
+    std::string receiver;
+    unsigned int amount;
 
-    const std::string transaction_id = Hash (sender + receiver + std::to_string(amount));
+     std::string transaction_id = Hash (sender + receiver + std::to_string(amount));
 
     public:
     Transaction (User& sender, User& receiver, unsigned int amount) : sender(sender.get_key()), receiver(receiver.get_key()), amount(amount) {}
 
     void print_about() {std::cout << transaction_id << ": "<< std::setw(26) << std::right << sender << " >>>> " << std::setw(26) << std::left << receiver << " | " << std::setw(5) << amount << " PatCoin\n";}
-    const std::string get_id() {return transaction_id;}
-    const std::string get_sender() {return sender;}
-    const std::string get_receiver() {return receiver;}
-    const unsigned int get_amount() {return amount;}
+     std::string get_id() const {return transaction_id;}
+     std::string get_sender() const {return sender;}
+     std::string get_receiver() const {return receiver;}
+     unsigned int get_amount() const {return amount;}
 };
 
 class Block
@@ -55,7 +55,7 @@ class Block
     private:
 
     //Body
-    const std::vector<Transaction> Transactions;
+     std::vector<Transaction> Transactions;
 
     /*std::string all_transaction_id ()
     {
@@ -70,15 +70,15 @@ class Block
   
 
     // Header
-    const std::string prev_block_hash;
-    const long unsigned int timestamp = static_cast<long unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-    const std::string root_hash;
-    const std::string version = "v0.2";
-    const unsigned int nounce;
-    const unsigned int difficulty_target;
-    const unsigned int transaction_amount = Transactions.size();
+     std::string prev_block_hash;
+     long unsigned int timestamp = static_cast<long unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+     std::string root_hash;
+     std::string version = "v0.2";
+     unsigned int nounce;
+     unsigned int difficulty_target;
+     unsigned int transaction_amount = Transactions.size();
 
-    const std::string block_hash = Hash (prev_block_hash + std::to_string(timestamp) + root_hash + version + std::to_string(nounce) + std::to_string(difficulty_target));
+     std::string block_hash = Hash (prev_block_hash + std::to_string(timestamp) + root_hash + version + std::to_string(nounce) + std::to_string(difficulty_target));
 
 
 
@@ -86,7 +86,10 @@ class Block
 
     Block (std::string prev_block_hash, unsigned int nounce, unsigned int difficulty_target, std::vector<Transaction> Transaction_Block, std::string root_hash) : prev_block_hash(prev_block_hash), nounce(nounce), difficulty_target(difficulty_target), Transactions(Transaction_Block), root_hash(root_hash) {}
 
-    const std::string get_hash() {return block_hash;}
+    std::string get_hash() const {return block_hash;}
+     const std::vector<Transaction>& get_transactions() const {
+    return Transactions;
+}
 
     void print_info()
     {
@@ -258,6 +261,7 @@ bool Verify_Merkle_Proof(std::string txid, const std::vector<MerkleNode>& proof,
     return hash == root;
 }
 
+
 Block Mine_Block (std::string prev_block_hash, unsigned int difficulty_target, std::vector<Transaction> transaction_block)
 {
     int nounce = 0;
@@ -280,6 +284,20 @@ Block Mine_Block (std::string prev_block_hash, unsigned int difficulty_target, s
     }
 }
 
+void Remove_Mined_Transactions(std::vector<Transaction>& pool,
+                               const std::vector<Transaction>& mined)
+{
+    pool.erase(
+        std::remove_if(pool.begin(), pool.end(),
+            [&](const Transaction& tx) {
+                return std::any_of(mined.begin(), mined.end(),
+                    [&](const Transaction& mt) {
+                        return tx.get_id() == mt.get_id();
+                    });
+            }),
+        pool.end());
+}
+
 bool Verify_Transaction(User& sender, User& receiver, unsigned int amount) 
 {
     if (sender.get_key() == receiver.get_key()) return false;
@@ -287,6 +305,84 @@ bool Verify_Transaction(User& sender, User& receiver, unsigned int amount)
     if (sender.get_balance() < amount) return false;
     return true;
 }
+
+#include <thread>
+#include <atomic>
+#include <vector>
+#include <optional>
+#include <chrono>
+
+// Thread-safe global mining flag
+std::atomic<bool> stop_mining(false);
+
+Block Mine_Block_With_Timeout(
+    const std::string& prev_block_hash,
+    unsigned int difficulty_target,
+    std::vector<Transaction> transactions,
+    int timeout_seconds)
+{
+    std::optional<Block> result;
+    unsigned int start_nonce = 0; // Continue nonce across retries
+
+    while (!result.has_value()) // Keep trying until a block is mined
+    {
+        stop_mining = false;
+        std::vector<std::thread> miners;
+        auto start_time = std::chrono::steady_clock::now();
+
+        // Launch 5 miners
+        for (int i = 0; i < 5; ++i)
+        {
+            miners.emplace_back([&, i]() {
+                try {
+                    std::string difficulty(difficulty_target, '0');
+                    std::string merkle_root = Compute_Merkle_Root(transactions);
+                    unsigned int nonce = start_nonce;
+
+                    while (!stop_mining)
+                    {
+                        Block candidate(prev_block_hash, nonce++, difficulty_target, transactions, merkle_root);
+                        auto hash = candidate.get_hash();
+
+                        if (hash.substr(0, difficulty_target) == difficulty)
+                        {
+                            if (!stop_mining.exchange(true)) // first thread to win
+                            {
+                                result = candidate;
+                                std::cout << "✅ Block mined by miner " << (i + 1) << "!\n";
+                            }
+                            return;
+                        }
+
+                        // Timeout check
+                        auto now = std::chrono::steady_clock::now();
+                        if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds)
+                        {
+                            stop_mining = true;
+                            return;
+                        }
+                    }
+                }
+                catch (...) {}
+            });
+        }
+
+        // Join all miners safely
+        for (auto& m : miners)
+            if (m.joinable()) m.join();
+
+        if (!result.has_value())
+        {
+            // Update start_nonce to continue from last attempted value
+            start_nonce += 1000000; // arbitrary large increment to avoid retrying same nonces
+            std::cout << "⏳ Timeout reached — retrying mining...\n";
+        }
+    }
+
+    return *result;
+}
+
+
 
 int main() 
 {
@@ -303,7 +399,7 @@ int main()
     std::cout << "| USERS GENERATED  |\n\n";
 
     std::cout << "| GENERATING TRANSACTIONS |\n";
-    std::vector<Transaction> Transactions = Generate_Transactions(Users, 166);
+    std::vector<Transaction> Transactions = Generate_Transactions(Users, 366);
     if (debug_mode) for (Transaction t : Transactions) { t.print_about(); }
     std::cout << "| TRANSACTIONS GENERATED  |\n\n";
 
@@ -313,41 +409,51 @@ int main()
 
     while (!Transactions.empty())
     {
-        std::vector<Transaction> T_Block  = Generate_Transaction_Block(Transactions);
+        std::vector<Transaction> T_Block = Generate_Transaction_Block(Transactions);
 
-        if (Blockchain.empty()) Blockchain.push_back(Mine_Block("0000000000000000000000000000000000000000000000000000000000000000", difficulty, T_Block));
-        else Blockchain.push_back(Mine_Block(Blockchain.back().get_hash(), difficulty, T_Block));
+        int timeout_seconds = 1;
+        std::string prev_hash = Blockchain.empty()
+            ? std::string(64, '0')
+            : Blockchain.back().get_hash();
 
+        std::optional<Block> mined_block = Mine_Block_With_Timeout(prev_hash, difficulty, T_Block, timeout_seconds);
 
+        if (!mined_block)
+        {
+            std::cout << "⚠️ No block mined within timeout.\n";
+            break;
+        }
 
+        // Add block to chain
+        Blockchain.push_back(*mined_block);
 
-std::string merkle_root = Compute_Merkle_Root(T_Block);
+        // Remove mined transactions from the pool
+        Remove_Mined_Transactions(Transactions, mined_block->get_transactions());
 
+        // Merkle root and proof for verification
+        std::string merkle_root = Compute_Merkle_Root(mined_block->get_transactions());
+        std::string target_txid = mined_block->get_transactions().front().get_id();
+        auto proof = Generate_Merkle_Proof(mined_block->get_transactions(), target_txid);
 
-std::string target_txid = T_Block.front().get_id();
-auto proof = Generate_Merkle_Proof(T_Block, target_txid);
+        if (Verify_Merkle_Proof(target_txid, proof, merkle_root))
+            std::cout << "✅ Transaction verified via Merkle proof.\n";
+        else
+            std::cout << "❌ Transaction verification failed!\n";
 
-if (Verify_Merkle_Proof(target_txid, proof, merkle_root))
-    std::cout << "✅ Transaction verified via Merkle proof.\n";
-else
-    std::cout << "❌ Transaction verification failed!\n";
-
-        for (auto t : T_Block) {
-            for (auto u : Users) {
-                if (u.get_key() == t.get_sender()) {
-            // Check if sender can afford the transaction
-                    if (u.get_balance() < t.get_amount()) {
-                        std::cout << "Invalid transaction skipped (insufficient funds): " << t.get_id() << "\n";
-                        continue; // skip transaction
-                    }
+        // Update user balances
+        for (auto& t : mined_block->get_transactions())
+        {
+            for (auto& u : Users)
+            {
+                if (u.get_key() == t.get_sender() && u.get_balance() >= t.get_amount())
                     u.update_balance(-t.get_amount());
-                }   
-            if (u.get_key() == t.get_receiver()) {
-                u.update_balance(t.get_amount());
+                if (u.get_key() == t.get_receiver())
+                    u.update_balance(t.get_amount());
             }
-            }
-}
+        }
     }
+
+
 
     std::cout << "| MINING COMPLETE |\n";
 
